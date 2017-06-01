@@ -9,14 +9,17 @@ import math
 import pickle
 import uuid
 import time
+from scipy import misc
+from sklearn.svm import SVC
+import align.detect_face as df
 
-pkl_path = "/home/cp612sh/models/my_classifier.pkl" # Where to load the pickle
+pkl_path = "/home/cp612sh/github/facenet/models/lfw_classifier.pkl" # Where to load the pickle
 model_path = "/home/cp612sh/github/facenet/20170512-110547/20170512-110547.pb" # Where to load the model
-train_path = "" # Folder for training photos
-align_path = "" # Folder to store aligned photos
+train_path = "/home/cp612sh/test/train" # Folder for training photos
+align_path = "/home/cp612sh/test/align" # Folder to store aligned photos
 batch_size = 1000
 image_size = 160
-dirpath = "/home/mc/photos" # Folder to store photos
+dirpath = "/home/cp612sh/test/photos" # Folder to store photos
 class GetPicture(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event): # Program will die here because we align the picture again and again and ...
         paths = [event.pathname]
@@ -35,14 +38,14 @@ def align(image_paths, image_size, margin, gpu_memory_fraction):
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_memory_fraction)
         sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
         with sess.as_default():
-            pnet, rnet, onet = align.detect_face.create_mtcnn(sess, None)
+            pnet, rnet, onet = df.create_mtcnn(sess, None)
   
     nrof_samples = len(image_paths)
     img_list = [None] * nrof_samples
     for i in xrange(nrof_samples):
         img = misc.imread(os.path.expanduser(image_paths[i]))
         img_size = np.asarray(img.shape)[0:2]
-        bounding_boxes, _ = align.detect_face.detect_face(img, minsize, pnet, rnet, onet, threshold, factor)
+        bounding_boxes, _ = df.detect_face(img, minsize, pnet, rnet, onet, threshold, factor)
         det = np.squeeze(bounding_boxes[0,0:4])
         bb = np.zeros(4, dtype=np.int32)
         bb[0] = np.maximum(det[0]-margin/2, 0)
@@ -70,7 +73,7 @@ def Compare(paths, aligned_images):
             print('Calculating features for images')
             emb_array = np.zeros((1, embedding_size))
             paths_batch = paths[0:1]
-            feed_dict = { images_placeholder:aligned_images,    :False }
+            feed_dict = { images_placeholder:aligned_images, phase_train_placeholder:False }
             emb_array[0:1,:] = sess.run(embeddings, feed_dict=feed_dict)
             
             with open(pkl_path, 'rb') as infile:
@@ -131,13 +134,13 @@ def train(model_path, pkl_path):
             # Run forward pass to calculate embeddings
             print('Calculating features for images')
             nrof_images = len(paths)
-            nrof_batches_per_epoch = int(math.ceil(1.0*nrof_images / args.batch_size))
+            nrof_batches_per_epoch = int(math.ceil(1.0*nrof_images / batch_size))
             emb_array = np.zeros((nrof_images, embedding_size))
             for i in range(nrof_batches_per_epoch):
-                start_index = i*args.batch_size
-                end_index = min((i+1)*args.batch_size, nrof_images)
+                start_index = i*batch_size
+                end_index = min((i+1)*batch_size, nrof_images)
                 paths_batch = paths[start_index:end_index]
-                images = facenet.load_data(paths_batch, False, False, args.image_size)
+                images = facenet.load_data(paths_batch, False, False, image_size)
                 feed_dict = { images_placeholder:images, phase_train_placeholder:False }
                 emb_array[start_index:end_index,:] = sess.run(embeddings, feed_dict=feed_dict)
             
@@ -163,10 +166,8 @@ def watch():
     notifier.loop()
 
 def main():
-    train()
     with open(pkl_path, 'rb') as infile:
         (model, class_names) = pickle.load(infile)
-    
     print('Loaded classifier model from file "%s"' % pkl_path)
     watch()
 
