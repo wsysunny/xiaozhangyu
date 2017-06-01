@@ -100,7 +100,7 @@ def move_photos(recognize, align_path):
         os.mkdir(new_folder)
         shutil.move(filename, os.path.join(new_folder, time.asctime() + '.jpg'))
     else:
-        shutil.move(filename, os.path.join(os.path.join(train_path, recognize)), time.asctime() + '.jpg')
+        shutil.move(filename, os.path.join(os.path.join(train_path, recognize), time.asctime() + '.jpg'))
 
             # best_class_indices = np.argmax(predictions, axis=1)
             # best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
