@@ -54,7 +54,7 @@ def align(image_paths, image_size, margin, gpu_memory_fraction):
         bb[3] = np.minimum(det[3]+margin/2, img_size[0])
         cropped = img[bb[1]:bb[3],bb[0]:bb[2],:]
         aligned = misc.imresize(cropped, (image_size, image_size), interp='bilinear')
-        output_filename = os.path.join(align_path, event.name)
+        output_filename = os.path.join(align_path, time.asctime() + '.jpg')
         misc.imsave(output_filename, aligned)
         prewhitened = facenet.prewhiten(aligned)
         img_list[i] = prewhitened
@@ -82,8 +82,9 @@ def Compare(paths, aligned_images):
             print('Loaded classifier model from file "%s"' % pkl_path)
 
             predictions = model.predict_proba(emb_array)
+            print (predictions)
             compare_threshold = 0.6
-            if max(predictions) < compare_threshold:
+            if max(predictions[0]) < compare_threshold:
                 return 0
             else:
                 best_class_indices = np.argmax(predictions, axis=1)
@@ -91,12 +92,12 @@ def Compare(paths, aligned_images):
 
 def move_photos(recognize, align_path):
     new_person = str(uuid.uuid4())
-    filename = os.listdir(align_path)[0]
+    filename = os.path.join(align_path, os.listdir(align_path)[0])
     if recognize == 0:
         while os.path.exists(os.path.join(train_path, new_person)):
             new_person = str(uuid.uuid4())
         new_folder = os.path.join(train_path, new_person)
-        os.makedir(new_folder)
+        os.mkdir(new_folder)
         shutil.move(filename, os.path.join(new_folder, time.asctime() + '.jpg'))
     else:
         shutil.move(filename, os.path.join(os.path.join(train_path, recognize)), time.asctime() + '.jpg')
