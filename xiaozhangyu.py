@@ -12,21 +12,54 @@ import time
 
 pkl_path = "/home/cp612sh/models/my_classifier.pkl" # Where to load the pickle
 model_path = "/home/mc/models/model-20170216-091149.pb" # Where to load the model
-train_path = "" # Photos for training folder
+train_path = "" # Folder for training photos
+align_path = "" # Folder to store aligned photos
 batch_size = 1000
 image_size = 160
 nrof_images = 1
-labels = ["unknown"]
 dirpath = "/home/mc/photos" # Folder to store photos
 class GetPicture(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event): # Program will die here because we align the picture again and again and ...
-        aligned_images = align.load_and_align_data([event.pathname], image_size, 32, 0.5) # Align the picture
         paths = [event.pathname]
-        recognize = Compare(paths)
-        move_photos(gp, event.pathname)
+        aligned_images = align(paths, image_size, 32, 0.5) # Align the picture
+        recognize = Compare(paths, aligned_images)
+        move_photos(recognize, align_path)
         train()
 
-def Compare(paths):
+def align(image_paths, image_size, margin, gpu_memory_fraction):
+    minsize = 20 # minimum size of face
+    threshold = [ 0.6, 0.7, 0.7 ]  # three steps's threshold
+    factor = 0.709 # scale factor
+    
+    print('Creating networks and loading parameters')
+    with tf.Graph().as_default():
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_memory_fraction)
+        sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
+        with sess.as_default():
+            pnet, rnet, onet = align.detect_face.create_mtcnn(sess, None)
+  
+    nrof_samples = len(image_paths)
+    img_list = [None] * nrof_samples
+    for i in xrange(nrof_samples):
+        img = misc.imread(os.path.expanduser(image_paths[i]))
+        img_size = np.asarray(img.shape)[0:2]
+        bounding_boxes, _ = align.detect_face.detect_face(img, minsize, pnet, rnet, onet, threshold, factor)
+        det = np.squeeze(bounding_boxes[0,0:4])
+        bb = np.zeros(4, dtype=np.int32)
+        bb[0] = np.maximum(det[0]-margin/2, 0)
+        bb[1] = np.maximum(det[1]-margin/2, 0)
+        bb[2] = np.minimum(det[2]+margin/2, img_size[1])
+        bb[3] = np.minimum(det[3]+margin/2, img_size[0])
+        cropped = img[bb[1]:bb[3],bb[0]:bb[2],:]
+        aligned = misc.imresize(cropped, (image_size, image_size), interp='bilinear')
+        output_filename = os.path.join(align_path, event.name)
+        misc.imsave(output_filename, aligned)
+        prewhitened = facenet.prewhiten(aligned)
+        img_list[i] = prewhitened
+    images = np.stack(img_list)
+    return images
+
+def Compare(paths, aligned_images):
     with tf.Graph().as_default():
         with tf.Session() as sess:
             facenet.load_model(model_path)
@@ -58,16 +91,17 @@ def Compare(paths):
                 best_class_indices = np.argmax(predictions, axis=1)
                 return class_names[best_class_indices]
 
-def move_photos(gp, filename):
+def move_photos(recognize, align_path):
     new_person = str(uuid.uuid4())
-    if gp.recognize == 0:
+    filename = os.listdir(align_path)[0]
+    if recognize == 0:
         while os.path.exists(os.path.join(train_path, new_person)):
             new_person = str(uuid.uuid4())
         new_folder = os.path.join(train_path, new_person)
         os.makedir(new_folder)
         shutil.move(filename, os.path.join(new_folder, time.asctime() + '.jpg'))
     else:
-        shutil.move(filename, os.path.join(os.path.join(train_path, gp.recognize)), time.asctime() + '.jpg')
+        shutil.move(filename, os.path.join(os.path.join(train_path, recognize)), time.asctime() + '.jpg')
 
             # best_class_indices = np.argmax(predictions, axis=1)
             # best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
@@ -80,6 +114,16 @@ def move_photos(gp, filename):
 
 def train():
     print('Training classifier')
+    model = SVC(kernel='linear', probability=True)
+    model.fit(emb_array, labels)
+
+    # Create a list of class names
+    class_names = [ cls.name.replace('_', ' ') for cls in dataset]
+
+    # Saving classifier model
+    with open(classifier_filename_exp, 'wb') as outfile:
+        pickle.dump((model, class_names), outfile)
+    print('Saved classifier model to file "%s"' % classifier_filename_exp)
     
 def watch():
     wm = pyinotify.WatchManager()
