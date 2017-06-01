@@ -4,19 +4,18 @@ import pyinotify
 import facenet
 import tensorflow as tf
 import numpy as np
-import compare as align
+import classifier as cf
 import math
 import pickle
 import uuid
 import time
 
 pkl_path = "/home/cp612sh/models/my_classifier.pkl" # Where to load the pickle
-model_path = "/home/mc/models/model-20170216-091149.pb" # Where to load the model
+model_path = "/home/cp612sh/github/facenet/20170512-110547/20170512-110547.pb" # Where to load the model
 train_path = "" # Folder for training photos
 align_path = "" # Folder to store aligned photos
 batch_size = 1000
 image_size = 160
-nrof_images = 1
 dirpath = "/home/mc/photos" # Folder to store photos
 class GetPicture(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event): # Program will die here because we align the picture again and again and ...
@@ -24,7 +23,7 @@ class GetPicture(pyinotify.ProcessEvent):
         aligned_images = align(paths, image_size, 32, 0.5) # Align the picture
         recognize = Compare(paths, aligned_images)
         move_photos(recognize, align_path)
-        train()
+        train(model_path, pkl_path)
 
 def align(image_paths, image_size, margin, gpu_memory_fraction):
     minsize = 20 # minimum size of face
@@ -69,14 +68,10 @@ def Compare(paths, aligned_images):
             embedding_size = embeddings.get_shape()[1]
 
             print('Calculating features for images')
-            nrof_batches_per_epoch = int(math.ceil(1.0*nrof_images / batch_size))
-            emb_array = np.zeros((nrof_images, embedding_size))
-            for i in range(nrof_batches_per_epoch):
-                start_index = i*batch_size
-                end_index = min((i+1)*batch_size, nrof_images)
-                paths_batch = paths[start_index:end_index]
-                feed_dict = { images_placeholder:aligned_images,    :False }
-                emb_array[start_index:end_index,:] = sess.run(embeddings, feed_dict=feed_dict)
+            emb_array = np.zeros((1, embedding_size))
+            paths_batch = paths[0:1]
+            feed_dict = { images_placeholder:aligned_images,    :False }
+            emb_array[0:1,:] = sess.run(embeddings, feed_dict=feed_dict)
             
             with open(pkl_path, 'rb') as infile:
                         (model, class_names) = pickle.load(infile)
@@ -112,19 +107,53 @@ def move_photos(recognize, align_path):
             # accuracy = np.mean(np.equal(best_class_indices, labels))
             # print accuracy
 
-def train():
-    print('Training classifier')
-    model = SVC(kernel='linear', probability=True)
-    model.fit(emb_array, labels)
+def train(model_path, pkl_path):
+    with tf.Graph().as_default():
+        with tf.Session() as sess:
+            dataset = facenet.get_dataset(train_path)
+            for cls in dataset:
+                assert(len(cls.image_paths)>0, 'There must be at least one image for each class in the dataset')
+            
+            paths, labels = facenet.get_image_paths_and_labels(dataset)
+            
+            print('Number of classes: %d' % len(dataset))
+            print('Number of images: %d' % len(paths))
+            # Load the model
+            print('Loading feature extraction model')
+            facenet.load_model(model_path)
 
-    # Create a list of class names
-    class_names = [ cls.name.replace('_', ' ') for cls in dataset]
+            # Get input and output tensors
+            images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
+            embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
+            phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
+            embedding_size = embeddings.get_shape()[1]
 
-    # Saving classifier model
-    with open(classifier_filename_exp, 'wb') as outfile:
-        pickle.dump((model, class_names), outfile)
-    print('Saved classifier model to file "%s"' % classifier_filename_exp)
-    
+            # Run forward pass to calculate embeddings
+            print('Calculating features for images')
+            nrof_images = len(paths)
+            nrof_batches_per_epoch = int(math.ceil(1.0*nrof_images / args.batch_size))
+            emb_array = np.zeros((nrof_images, embedding_size))
+            for i in range(nrof_batches_per_epoch):
+                start_index = i*args.batch_size
+                end_index = min((i+1)*args.batch_size, nrof_images)
+                paths_batch = paths[start_index:end_index]
+                images = facenet.load_data(paths_batch, False, False, args.image_size)
+                feed_dict = { images_placeholder:images, phase_train_placeholder:False }
+                emb_array[start_index:end_index,:] = sess.run(embeddings, feed_dict=feed_dict)
+            
+            classifier_filename_exp = os.path.expanduser(pkl_path)
+            print('Training classifier')
+            model = SVC(kernel='linear', probability=True)
+            model.fit(emb_array, labels)
+
+            # Create a list of class names
+            class_names = [ cls.name.replace('_', ' ') for cls in dataset]
+
+            # Saving classifier model
+            with open(classifier_filename_exp, 'wb') as outfile:
+                pickle.dump((model, class_names), outfile)
+            print('Saved classifier model to file "%s"' % classifier_filename_exp)
+            
 def watch():
     wm = pyinotify.WatchManager()
     wm.add_watch(dirpath, pyinotify.IN_CREATE, rec=True)
