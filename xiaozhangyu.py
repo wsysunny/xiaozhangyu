@@ -17,9 +17,9 @@ pkl_path = "/home/cp612sh/github/facenet/models/lfw_classifier.pkl" # Where to l
 model_path = "/home/cp612sh/github/facenet/20170512-110547/20170512-110547.pb" # Where to load the model
 train_path = "/home/cp612sh/test/train" # Folder for training photos
 align_path = "/home/cp612sh/test/align" # Folder to store aligned photos
-batch_size = 1000
-image_size = 160
 dirpath = "/home/cp612sh/test/photos" # Folder to store photos
+batch_size = 100
+image_size = 160
 class GetPicture(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event): # Program will die here because we align the picture again and again and ...
         paths = [event.pathname]
@@ -54,7 +54,7 @@ def align(image_paths, image_size, margin, gpu_memory_fraction):
         bb[3] = np.minimum(det[3]+margin/2, img_size[0])
         cropped = img[bb[1]:bb[3],bb[0]:bb[2],:]
         aligned = misc.imresize(cropped, (image_size, image_size), interp='bilinear')
-        output_filename = os.path.join(align_path, time.asctime() + '.jpg')
+        output_filename = os.path.join(align_path, time.asctime() + '.png')
         misc.imsave(output_filename, aligned)
         prewhitened = facenet.prewhiten(aligned)
         img_list[i] = prewhitened
@@ -83,12 +83,16 @@ def Compare(paths, aligned_images):
 
             predictions = model.predict_proba(emb_array)
             print (predictions)
-            compare_threshold = 0.6
+            compare_threshold = 0.5
             if max(predictions[0]) < compare_threshold:
+                print('\nCan\'t recognize this person\n')
                 return 0
             else:
                 best_class_indices = np.argmax(predictions, axis=1)
-                return class_names[best_class_indices]
+                print('\nThe most likely person is: %s\n' % class_names[best_class_indices[0]])
+                best_class_tmp = class_names[best_class_indices[0]]
+                best_class = best_class_tmp.replace(' ', '_')
+                return best_class
 
 def move_photos(recognize, align_path):
     new_person = str(uuid.uuid4())
@@ -98,9 +102,12 @@ def move_photos(recognize, align_path):
             new_person = str(uuid.uuid4())
         new_folder = os.path.join(train_path, new_person)
         os.mkdir(new_folder)
-        shutil.move(filename, os.path.join(new_folder, time.asctime() + '.jpg'))
+        newname = os.path.join(new_folder, time.asctime() + '.png')
+        shutil.move(filename, newname)
+        for i in range(20):
+            shutil.copy(newname, newname[:-4] + str(i) + '.png')
     else:
-        shutil.move(filename, os.path.join(os.path.join(train_path, recognize), time.asctime() + '.jpg'))
+        shutil.move(filename, os.path.join(os.path.join(train_path, recognize), time.asctime() + '.png'))
 
             # best_class_indices = np.argmax(predictions, axis=1)
             # best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
@@ -149,7 +156,7 @@ def train(model_path, pkl_path):
             print('Training classifier')
             model = SVC(kernel='linear', probability=True)
             model.fit(emb_array, labels)
-
+            
             # Create a list of class names
             class_names = [ cls.name.replace('_', ' ') for cls in dataset]
 
@@ -167,9 +174,13 @@ def watch():
     notifier.loop()
 
 def main():
-    with open(pkl_path, 'rb') as infile:
-        (model, class_names) = pickle.load(infile)
-    print('Loaded classifier model from file "%s"' % pkl_path)
+    try:
+        train(model_path, pkl_path)
+    except:
+        pass
+    # with open(pkl_path, 'rb') as infile:
+    #     (model, class_names) = pickle.load(infile)
+    # print('Loaded classifier model from file "%s"' % pkl_path)
     watch()
 
 if __name__ == '__main__':
