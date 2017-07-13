@@ -8,7 +8,7 @@ import uuid
 import time
 from scipy import misc
 from sklearn.svm import SVC
-import align.detect_face as df
+import detect_face as df
 import base64
 import requests
 import urllib

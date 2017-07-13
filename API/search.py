@@ -1,14 +1,14 @@
 import cherrypy
 import os
 import os.path
-import facenet
+import facenet 
 import tensorflow as tf
 import numpy as np
 import pickle
 import uuid
 import time
 from scipy import misc
-import align.detect_face as df
+import detect_face as df
 import base64
 import requests
 from io import BytesIO
@@ -269,35 +269,35 @@ def search(**kwargs):
     return result
 
 
-config = {
-    'global' : {
-        'server.socket_host' : '127.0.0.1',
-        'server.socket_port' : 8080,
-        'server.thread_pool' : 8,
-        'server.max_request_body_size' : 0,
-        'server.socket_timeout' : 60
-  }
-}
+# config = {
+#     'global' : {
+#         'server.socket_host' : '127.0.0.1',
+#         'server.socket_port' : 8080,
+#         'server.thread_pool' : 8,
+#         'server.max_request_body_size' : 0,
+#         'server.socket_timeout' : 60
+#   }
+# }
 
-@cherrypy.expose
-class API(object):
+# @cherrypy.expose
+# class API(object):
     
-    @cherrypy.expose
-    @cherrypy.tools.json_out()
-    def index(self):
-        return {"key": "value"}
+#     @cherrypy.expose
+#     @cherrypy.tools.json_out()
+#     def index(self):
+#         return {"key": "value"}
 
-    @cherrypy.expose
-    @cherrypy.tools.json_out()
-    def search(self, **kwargs):
-        result = search(**kwargs)
-        return result
-
-    
+#     @cherrypy.expose
+#     @cherrypy.tools.json_out()
+#     def search(self, **kwargs):
+#         result = search(**kwargs)
+#         return result
 
     
-if __name__ == '__main__':
-    cherrypy.quickstart(API(), '/', config)
+
+    
+# if __name__ == '__main__':
+#     cherrypy.quickstart(API(), '/', config)
 
 
     

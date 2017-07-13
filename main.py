@@ -1,6 +1,6 @@
 import cherrypy
 import API.detect
-import API.search
+import API.search as sh
 
 config = {
     'global' : {
@@ -23,7 +23,7 @@ class API(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def search(self, **kwargs):
-        result = search(**kwargs)
+        result = sh.search(**kwargs)
         return result
     
     @cherrypy.expose
