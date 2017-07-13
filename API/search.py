@@ -106,7 +106,7 @@ def search(**kwargs):
             if 'face_token' in kwargs.keys():
                 mark = 0
                 image_id = kwargs['face_token']
-                for parent, dirnames, filenames in os.walk(faceset_path):
+                for parent, dirnames, filenames in os.walk(kwargs['faceset_token']):
                     for filename in filenames:
                         if filename == kwargs['face_token'] :
                             aligned_image = misc.imread(os.path.join(parent, filename))
@@ -132,7 +132,7 @@ def search(**kwargs):
             if 'face_token' in kwargs.keys():
                 mark = 0
                 image_id = kwargs['face_token']
-                for parent, dirnames, filenames in os.walk(faceset_path):
+                for parent, dirnames, filenames in os.walk(kwargs['outer_id']):
                     for filename in filenames:
                         if filename == kwargs['face_token'] :
                             aligned_image = misc.imread(os.path.join(parent, filename))
