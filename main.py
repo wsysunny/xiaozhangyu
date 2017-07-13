@@ -2,6 +2,16 @@ import cherrypy
 import API.detect
 import API.search
 
+config = {
+    'global' : {
+        'server.socket_host' : '127.0.0.1',
+        'server.socket_port' : 8080,
+        'server.thread_pool' : 8,
+        'server.max_request_body_size' : 0,
+        'server.socket_timeout' : 60
+  }
+}
+
 @cherrypy.expose
 class API(object):
     
