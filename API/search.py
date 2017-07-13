@@ -1,27 +1,17 @@
-import random
-import string
 import cherrypy
 import os
 import os.path
 import facenet
 import tensorflow as tf
 import numpy as np
-import classifier as cf
-import math
 import pickle
 import uuid
 import time
 from scipy import misc
-from sklearn.svm import SVC
 import align.detect_face as df
-import urllib2
-import Image
-import cStringIO
 import base64
-import json
 import requests
 from io import BytesIO
-import cv2
 
 pkl_path = "/home/cp612sh/wsy/facenet/models/lfw_classifier.pkl" # Where to load the pickle
 model_path = "/home/cp612sh/wsy/facenet/models/20170512-110547/20170512-110547.pb" # Where to load the model
